@@ -27,11 +27,14 @@ class Learner:
         try:
             # Get the probability predictions for each class for each instance
             probas = self.model.predict_proba(X_pool)
-            uncertainties = np.array([1 - np.max(proba, axis=1) for proba in probas])
+            if type(probas) is list:
+                uncertainties = np.array([1 - np.max(proba, axis=1) for proba in probas])
+            else:
+                uncertainties = probas
         except:
             # If the classifier does not support predict_proba, we use decision_function
             # Softmax is applied to convert decision scores to probabilities
-            decision_function = model.decision_function(X_pool)
+            decision_function = self.model.decision_function(X_pool)
             probas = softmax(decision_function, axis=2)
             uncertainties = 1 - np.max(probas, axis=2)
 

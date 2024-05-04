@@ -21,17 +21,22 @@ def evaluate_predictions(y_true, y_pred):
 def pilotStudy():
     # performs pilot study to determine the level of uncertainty to determine convergence
     # should also determine how much data to use for active learning
-    data = pd.read_csv("data/AlaskaClean.csv")
+    data = pd.read_csv("data/AlaskaClean_modified.csv")
     # Selecting features and labels
-    features = ['water', 'wetland', 'shrub', 'dshrub', 'dec', 'mixed', 'spruce', 'baresnow', 'elev_m']
+    features = ['water', 'wetland', 'shrub', 'dshrub', 'dec', 'mixed', 'spruce', 'baresnow']
     labels = ['AMPI', 'AMRO', 'ATSP', 'DEJU', 'FOSP', 'GCSP', 'HETH', 'OCWA', 'ROPT', 'SAVS', 'WCSP', 'WIPT', 'WISN', 'WIWA', 'YRWA']
-
+    #| Park | 2004 | 2005 | 2006 | 2008 |
+    #+------+-----+-----+-----+-----+
+    #| ANIA | 0 | 0 | 0 | 100 |
+    #| KATM | 0 | 313 | 69 | 0 |
+    #| LACL | 318 | 0 | 35 | 0 |
+    #+------+-----+-----+-----+-----+
     # Splitting the data into training and testing sets based on the year
-    train_data = data[(data['year'] == 2004) & (data['park'] == "LACL")]
-    base_data = data[(data['year'] == 2006) & (data['park'] == "LACL")]
-    test_data = data[(data['year'] == 2006) & (data['park'] == "KATM")]
-    pool_data = data[(data['year'] == 2005) & (data['park'] == "KATM")]
-    real_test = data[(data['year'] == 2008) & (data['park'] == "ANIA")]
+    train_data = data[data['year'] == 2005]
+    base_data = data[data['park'] == "ANIA"]
+    test_data = data[data['park'] == "ANIA"]
+    pool_data = data[data['park'] == "ANIA"]
+    real_test = data[data['park'] == "ANIA"]
     # Extracting features and labels for training and testing
     X_train = np.array(train_data[features])
     y_train = np.array(train_data[labels])
@@ -64,15 +69,17 @@ def pilotStudy():
 
             if not n_queries:
                 n_queries = X_pool.shape[0]
-
+            X_pool_copy = X_pool.copy()
+            y_pool_copy = y_pool.copy()
             for i in range(n_queries):
-                query_idx = learner.query(X_pool) # Correctly reshaping y
 
-                learner.teach(X=X_pool[query_idx].reshape(1, -1),y=y_pool[query_idx].reshape(1, -1))
+                query_idx = learner.query(X_pool_copy) # Correctly reshaping y
+
+                learner.teach(X=X_pool_copy[query_idx].reshape(1, -1),y=y_pool_copy[query_idx].reshape(1, -1))
 
                 # Remove the queried instance from the unlabeled pool
-                X_pool = np.delete(X_pool, query_idx, axis=0)
-                y_pool = np.delete(y_pool, query_idx, axis=0)
+                X_pool = np.delete(X_pool_copy, query_idx, axis=0)
+                y_pool = np.delete(y_pool_copy, query_idx, axis=0)
                 # Calculate and report our model's accuracy.
                 model_f1, model_ham = evaluate_predictions(y_test, learner.model.predict(X_test))
                 print(f"F1 after query {i}: {model_f1:0.4f}, Ham after query {i}: {model_ham:0.4f}")
