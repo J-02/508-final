@@ -33,7 +33,7 @@ def select_uncertain_samples(model, X, n_samples):
         indices = np.random.choice(len(X), size=n_samples, replace=False)
     return indices
 
-def loadData(file):
+def loadData(file="data/AlaskaClean.csv"):
     data = pd.read_csv(file)
     # Selecting features and labels
     features = ['water', 'wetland', 'shrub', 'dshrub', 'dec', 'mixed', 'spruce', 'baresnow', 'elev_m']
