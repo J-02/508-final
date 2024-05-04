@@ -1,9 +1,6 @@
 from sklearn.tree import DecisionTreeClassifier
-
 from models import getModels, loadData
-from modAL.models import ActiveLearner # make sure use pip install modAL-python if still doesnt load change lib folder name from modal to modAL
-from modAL.uncertainty import uncertainty_sampling
-from modAL.multilabel import *
+from ALearn import Learner
 from sklearn.metrics import accuracy_score, f1_score, hamming_loss
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -34,7 +31,7 @@ def pilotStudy():
     base_data = data[(data['year'] == 2006) & (data['park'] == "LACL")]
     test_data = data[(data['year'] == 2006) & (data['park'] == "KATM")]
     pool_data = data[(data['year'] == 2005) & (data['park'] == "KATM")]
-
+    real_test = data[(data['year'] == 2008) & (data['park'] == "ANIA")]
     # Extracting features and labels for training and testing
     X_train = np.array(train_data[features])
     y_train = np.array(train_data[labels])
@@ -49,31 +46,35 @@ def pilotStudy():
         # uses test1 - uses 2006 data from katm to active sample
         # differnt park with 2 years difference from OG
         # trains on 2004 LACL active samples on 2005 KATM test on 2006 KATM
+
         initialmodels = getModels()
         [model.fit(X_train, y_train) for model in initialmodels]
         perfgoal = [evaluate_predictions(y_base, model.predict(X_base)) for model in initialmodels]
         print(perfgoal)
-        learners = [ActiveLearner(estimator=model, query_strategy=uncertainty_sampling,
-                                  X_training=X_train, y_training=y_train) for model in getModels()]
+        learners = [Learner(model, X_train, y_train) for model in initialmodels]
 
         def activeLearning(learner, X_pool, y_pool, X_test, y_test, n_queries=False):
-            performance = [evaluate_predictions(y_test, learner.predict(X_test))]
+            model_f1, model_ham = evaluate_predictions(y_test, learner.model.predict(X_test))
+            print(f"F1 initial: {model_f1:0.4f}, Ham initial: {model_ham:0.4f}")
+            model_accuracy = (model_f1, model_ham)
+            # Save our model's performance for plotting.
+            performance = []
+            performance.append(model_accuracy)
+
+
             if not n_queries:
                 n_queries = X_pool.shape[0]
 
             for i in range(n_queries):
-                query_idx, query_instance = learner.query(X_pool, n_instances=1, random_tie_break=True)# Correctly reshaping y
+                query_idx = learner.query(X_pool) # Correctly reshaping y
 
-                learner.teach(
-                    X=X_pool[query_idx[:,0]].reshape(1, -1),
-                    y=y_pool[query_idx[:,0]].reshape(1, -1)
-                )
+                learner.teach(X=X_pool[query_idx].reshape(1, -1),y=y_pool[query_idx].reshape(1, -1))
 
                 # Remove the queried instance from the unlabeled pool
-                X_pool = np.delete(X_pool, query_idx[:,0], axis=0)
-                y_pool = np.delete(y_pool, query_idx[:,0], axis=0)
+                X_pool = np.delete(X_pool, query_idx, axis=0)
+                y_pool = np.delete(y_pool, query_idx, axis=0)
                 # Calculate and report our model's accuracy.
-                model_f1, model_ham = evaluate_predictions(y_test, learner.predict(X_test))
+                model_f1, model_ham = evaluate_predictions(y_test, learner.model.predict(X_test))
                 print(f"F1 after query {i}: {model_f1:0.4f}, Ham after query {i}: {model_ham:0.4f}")
                 model_accuracy = (model_f1, model_ham)
                 # Save our model's performance for plotting.

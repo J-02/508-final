@@ -92,7 +92,7 @@ def experiment(models, X_train, y_train, X_test, y_test, fine_tune_ratio):
 
 
 # Define models
-rf_model = RandomForestClassifier(n_estimators=100)
+rf_model = RandomForestClassifier(n_estimators=100, random_state=22)
 xgb_model = XGBClassifier(use_label_encoder=False, eval_metric='mlogloss')
 nn_model = Sequential([
     Dense(64, activation='relu', input_dim=9),
