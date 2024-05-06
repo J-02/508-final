@@ -2,7 +2,7 @@
 ## This should be: Randomforest, XGboost, LGBMClassifier and the NN
 ## each model should have the same fit, predict fucntion and be able to output uncertainties
 from sklearn.multioutput import MultiOutputClassifier # for stacking Lgbmboost abd xgboost
-import lightgbm as lgb
+#import lightgbm as lgb
 from xgboost import XGBClassifier
 import xgboost as xgb
 from sklearn.ensemble import RandomForestClassifier
@@ -49,9 +49,9 @@ def getModels():
     # simple method to get all the models in a list
     rf_model = RandomForestClassifier(n_estimators=500, random_state=22, bootstrap=False)
     xgb_model = XGBClassifier(use_label_encoder=False, multi_strategy="multi_output_tree", random_state=22)
-    lgb_model = MultiOutputClassifier(lgb.LGBMClassifier(verbosity=-1, random_state=22))
-    #nn_model = getNN()
-    models = [rf_model, xgb_model, lgb_model] # nn_model]
+    #lgb_model = MultiOutputClassifier(lgb.LGBMClassifier(verbosity=-1, random_state=22))
+    nn_model = getNN()
+    models = [nn_model, rf_model, xgb_model] #lgb_model] # nn_model]
     return models
 
 class MCDropout(Layer):
@@ -63,19 +63,15 @@ class MCDropout(Layer):
         return tf.nn.dropout(inputs, rate=self.rate, name="MCDropout")
 
 def getNN():
-    normalizer = Normalization()
     model = Sequential([
-        Input(shape=(9,)),
-        normalizer,
+        Input(shape=(8,)),
         Dense(512, kernel_regularizer=l2(0.01)),
-        BatchNormalization(),
         Activation('relu'),
         MCDropout(0.5),
         Dense(512, kernel_regularizer=l2(0.01)),
-        BatchNormalization(),
         Activation('relu'),
         MCDropout(0.5),
-        Dense(15, activation='sigmoid')
+        Dense(13, activation='sigmoid')
     ])
     model.compile(optimizer=Adam(0.001), loss='binary_crossentropy', metrics=['accuracy', AUC(name='auc')])
     return model

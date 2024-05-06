@@ -3,7 +3,7 @@ from sklearn.utils.extmath import softmax
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.ensemble import RandomForestClassifier
 import xgboost as xgb
-import lightgbm as lgb
+#import lightgbm as lgb
 from xgboost import Booster
 from xgboost import XGBClassifier
 class Learner:
@@ -54,15 +54,22 @@ class Learner:
                 # Sum entropy across all labels to get total entropy for each instance
                 entropy = np.sum(entropy, axis=1)
                 print(f"Entropy range: {np.min(entropy)}-{np.max(entropy)}")
-        except:
-            # If the classifier does not support predict_proba, we use decision_function
-            # Softmax is applied to convert decision scores to probabilities
-            decision_function = self.model.decision_function(X_pool)
-            probas = softmax(decision_function, axis=2)
-            uncertainties = 1 - np.max(probas, axis=2)
+        except AttributeError:
+                # If the classifier does not support predict_proba, we use decision_function
+                # Assumes decision_function output can be converted directly to probabilities using softmax
+                probas = self.model.predict(X_pool)
+                if isinstance(probas, list):
+                    entropy = np.sum(
+                        [-np.sum(np.clip(p, 1e-9, 1 - 1e-9) * np.log(np.clip(p, 1e-9, 1 - 1e-9)), axis=1) for p in
+                         probas], axis=0)
+                    uncertainties = np.array([1 - np.max(np.clip(proba, 1e-9, 1 - 1e-9), axis=1) for proba in probas])
+                else:
+                    probas = np.clip(probas, 1e-9, 1 - 1e-9)
+                    entropy = -np.sum(probas * np.log(probas), axis=1)
+                print(f"Entropy range: {np.min(entropy)}-{np.max(entropy)}")
 
         # Calculate cumulative uncertainty across all labels for each sample
-        cumulative_uncertainty = np.sum(uncertainties, axis=0)
+        #cumulative_uncertainty = np.sum(uncertainties, axis=0)
         # Find indices with the highest entropy
         if is_first_query:
             query_indices = np.argsort(-entropy)[:5]  # Top 5 uncertain indices
