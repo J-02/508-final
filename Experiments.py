@@ -1,16 +1,29 @@
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.ensemble import RandomForestClassifier
+import xgboost as xgb
+import lightgbm as lgb
 from models import getModels, loadData
 from ALearn import Learner
 from sklearn.metrics import accuracy_score, f1_score, hamming_loss
 import matplotlib.pyplot as plt
-import matplotlib as mpl
+import seaborn as sns
 import pandas as pd
 import numpy as np
-def main():
-    # performs 3 experiments for each algorithm
-    X_train, y_train, X_test, y_test = loadData()  # loads training and test data split on 2008
-    models = getModels() # loads models to list
-
+from xgboost import Booster
+from sklearn.model_selection import train_test_split
+from skmultilearn.model_selection import IterativeStratification
+def evaluate(model, X_pool, y_pool, iteration="initial"):
+    if isinstance(model, Booster):
+    # For XGBoost, use the `fit` method with `xgb_model` parameter
+        dnew = xgb.DMatrix(X_pool, label=y_pool)
+        y_pred = model.predict(dnew)
+        y_pred = y_pred.round(decimals=0).astype(int)
+    else:
+        y_pred = model.predict(X_pool)
+    f1, ham = evaluate_predictions(y_pool, y_pred)
+    print(f"Iteration {iteration}: F1 {f1:.4f}, Ham {ham:.4f}")
+    return f1, ham
 
 def evaluate_predictions(y_true, y_pred):
     # returns both f1 micro score and hamming loss
@@ -18,111 +31,226 @@ def evaluate_predictions(y_true, y_pred):
     hamming_loss_val = hamming_loss(y_true, y_pred)
     return f1_micro, hamming_loss_val
 
-def pilotStudy():
+def main():
     # performs pilot study to determine the level of uncertainty to determine convergence
     # should also determine how much data to use for active learning
     data = pd.read_csv("data/AlaskaClean_modified.csv")
     # Selecting features and labels
     features = ['water', 'wetland', 'shrub', 'dshrub', 'dec', 'mixed', 'spruce', 'baresnow']
-    labels = ['AMPI', 'AMRO', 'ATSP', 'DEJU', 'FOSP', 'GCSP', 'HETH', 'OCWA', 'ROPT', 'SAVS', 'WCSP', 'WIPT', 'WISN', 'WIWA', 'YRWA']
+    labels = ['AMPI', 'AMRO', 'ATSP',  'FOSP', 'GCSP', 'HETH', 'OCWA', 'ROPT', 'SAVS', 'WCSP', 'WIPT', 'WISN', 'WIWA']
+    #labels = ['AMPI', 'AMRO', 'ATSP', 'DEJU', 'FOSP', 'GCSP', 'HETH', 'OCWA', 'ROPT', 'SAVS', 'WCSP', 'WIPT', 'WISN', 'WIWA', 'YRWA']
     #| Park | 2004 | 2005 | 2006 | 2008 |
     #+------+-----+-----+-----+-----+
     #| ANIA | 0 | 0 | 0 | 100 |
     #| KATM | 0 | 313 | 69 | 0 |
     #| LACL | 318 | 0 | 35 | 0 |
     #+------+-----+-----+-----+-----+
-    # Splitting the data into training and testing sets based on the year
-    train_data = data[data['year'] == 2005]
-    base_data = data[data['park'] == "ANIA"]
-    test_data = data[data['park'] == "ANIA"]
-    pool_data = data[data['park'] == "ANIA"]
-    real_test = data[data['park'] == "ANIA"]
+    # Define which data to use for train, pool, and test
+
+
+    # Randomly select n samples from data_2005 for training
+    #n = 318
+    #np.random.seed(16)
+    #train_indices = np.random.choice(data_2005.index, size=n, replace=False)
+    #train_data = data_2005.loc[train_indices]
+    train_data = data[data['year'] == 2006]
+    test_data = data[data['year'] == 2008]
+    stratifier = IterativeStratification(n_splits=4, order=1, random_state=2)
+    #pool_data, test_data = train_test_split(df, test_size=0.50, random_state=2)
+    # Use the remaining samples as pool data
+    #pool_data = data[data['year'] == 2005]
+    #pool_data = data_2005.drop(train_indices)
+      # This unpacks the first split pair (modify if different splits are needed)
+    X_test = test_data[features].values
+    y_test = test_data[labels].values
+
+    indices = list(stratifier.split(X_test, y_test))
+    test_indices, train_indices = indices[0]
+    # Using one split as the pool and the other as the test set
+    X_pool, y_pool = X_test[train_indices], y_test[train_indices]
+    X_test, y_test = X_test[test_indices], y_test[test_indices]
+    # Define test data
+    #test_data = data[(data['year'] == 2006) & (data['park'] == "KATM")]
     # Extracting features and labels for training and testing
     X_train = np.array(train_data[features])
     y_train = np.array(train_data[labels])
-    X_base = np.array(base_data[features])
-    y_base = np.array(base_data[labels])
-    X_test = np.array(test_data[features])
-    y_test = np.array(test_data[labels])
-    X_pool = np.array(pool_data[features])
-    y_pool = np.array(pool_data[labels])
 
-    def study():
-        # uses test1 - uses 2006 data from katm to active sample
-        # differnt park with 2 years difference from OG
-        # trains on 2004 LACL active samples on 2005 KATM test on 2006 KATM
+    #X_pool = np.array(pool_data[features])
+    #y_pool = np.array(pool_data[labels])
 
-        initialmodels = getModels()
-        [model.fit(X_train, y_train) for model in initialmodels]
-        perfgoal = [evaluate_predictions(y_base, model.predict(X_base)) for model in initialmodels]
-        print(perfgoal)
-        learners = [Learner(model, X_train, y_train) for model in initialmodels]
+    #X_test = np.array(test_data[features])
+    #y_test = np.array(test_data[labels])
 
-        def activeLearning(learner, X_pool, y_pool, X_test, y_test, n_queries=False):
-            model_f1, model_ham = evaluate_predictions(y_test, learner.model.predict(X_test))
-            print(f"F1 initial: {model_f1:0.4f}, Ham initial: {model_ham:0.4f}")
-            model_accuracy = (model_f1, model_ham)
-            # Save our model's performance for plotting.
-            performance = []
-            performance.append(model_accuracy)
+    initialmodels = getModels()
+    [model.fit(X_train, y_train) for model in initialmodels]
+    learners = [Learner(model, X_train, y_train) for model in initialmodels]
+    model_names = ["Random Forest", "XGBoost", "LightGBM"]
+    palette = sns.color_palette("husl", len(learners))
+
+    for i, (learner, name) in enumerate(zip(learners, model_names)):
+        f1_scores, hamming_losses = activeLearning(learner, X_pool, y_pool, X_test, y_test)
+        learner.model.fit(X_pool, y_pool)
+        f1_small, ham_small = evaluate(learner.model, X_test, y_test, "Small model")
+        X_combined = np.vstack([X_pool, X_train])
+        y_combined = np.vstack([y_pool, y_train])
+        learner.model.fit(X_combined, y_combined)
+
+        # Evaluate the model trained on the combined dataset
+        f1_combined, ham_combined = evaluate(learner.model, X_test, y_test, "Combined model")
+        # Create a DataFrame for plotting
+        data = pd.DataFrame({'Iteration': range(len(f1_scores)),
+                             'F1 Score': f1_scores,
+                             'Hamming Loss': hamming_losses})
+
+        # Melt the DataFrame for plotting with Seaborn
+        melted_data = pd.melt(data, id_vars=['Iteration'], value_vars=['F1 Score', 'Hamming Loss'], var_name='Metric',
+                              value_name='Score')
+        window_size = 1  # Adjust the window size as needed
+        melted_data['Smoothed Score'] = melted_data.groupby('Metric')['Score'].rolling(window=window_size,
+                                                                                       center=True).mean().reset_index(
+            level=0, drop=True)
+
+        # Smooth the lines using a rolling average
+        sns.lineplot(data=melted_data[melted_data['Metric'] == 'F1 Score'], x='Iteration', y='Smoothed Score',
+                     label=f'{name} F1 Score', linestyle='-', linewidth=2, color=palette[i])
+
+        # Optional: Plotting Hamming Loss if needed
+        # sns.lineplot(data=melted_data[melted_data['Metric'] == 'Hamming Loss'], x='Iteration', y='Smoothed Score', label=f'{name} Hamming Loss', linestyle=':', linewidth=2, color=palette[i])
+        plt.axhline(y=f1_combined, color=palette[i], linestyle='--', label=f'{name} Combined Model F1', linewidth=1)
+        # Static model's performance lines
+        plt.axhline(y=f1_small, color=palette[i], linestyle=':', label=f'{name} Small Model F1', linewidth=1)
+        # plt.axhline(y=ham, color=palette[i], linestyle=':', label=f'{name} Small Model Hamming Loss', linewidth=1)
+    plt.legend(title='Model', loc='upper left', bbox_to_anchor=(1.05, 1), title_fontsize='8', fontsize='6')
+    plt.title('Active Learning Performance')
+    plt.xlabel('Iteration')
+    plt.ylabel('Score')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
 
-            if not n_queries:
-                n_queries = X_pool.shape[0]
-            X_pool_copy = X_pool.copy()
-            y_pool_copy = y_pool.copy()
-            for i in range(n_queries):
+def main(weightx=1):
+    data = pd.read_csv("data/AlaskaClean_modified.csv")
+    features = ['water', 'wetland', 'shrub', 'dshrub', 'dec', 'mixed', 'spruce', 'baresnow']
+    labels = ['AMPI', 'AMRO', 'ATSP', 'FOSP', 'GCSP', 'HETH', 'OCWA', 'ROPT', 'SAVS', 'WCSP', 'WIPT', 'WISN', 'WIWA']
 
-                query_idx = learner.query(X_pool_copy) # Correctly reshaping y
+    train_data = data[(data["year"] == 2006) & (data["park"] == "KATM")]
+    test_data = data[data['year'] == 2008]
 
-                learner.teach(X=X_pool_copy[query_idx].reshape(1, -1),y=y_pool_copy[query_idx].reshape(1, -1))
+    X_train = np.array(train_data[features])
+    y_train = np.array(train_data[labels])
+    X_test_all = np.array(test_data[features])
+    y_test_all = np.array(test_data[labels])
 
-                # Remove the queried instance from the unlabeled pool
-                X_pool = np.delete(X_pool_copy, query_idx, axis=0)
-                y_pool = np.delete(y_pool_copy, query_idx, axis=0)
-                # Calculate and report our model's accuracy.
-                model_f1, model_ham = evaluate_predictions(y_test, learner.model.predict(X_test))
-                print(f"F1 after query {i}: {model_f1:0.4f}, Ham after query {i}: {model_ham:0.4f}")
-                model_accuracy = (model_f1, model_ham)
-                # Save our model's performance for plotting.
-                performance.append(model_accuracy)
+    stratifier = IterativeStratification(n_splits=4, order=1, random_state=5)
+    indices = list(stratifier.split(X_test_all, y_test_all))
 
-            fig, ax = plt.subplots(figsize=(8.5, 6), dpi=130)
+    initialmodels = getModels()
+    [model.fit(X_train, y_train) for model in initialmodels]
+    model_names = ["Random Forest", "XGBoost", "LightGBM"]
+    palette = sns.color_palette("husl", len(initialmodels))
 
-            # Assuming performance_history contains tuples (f1_score, hamming_loss)
-            f1_scores = [score[0] for score in performance]
-            hamming_losses = [score[1] for score in performance]
+    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(20, 15))  # Adjust as needed for the number of splits
+    axs = axs.flatten()
 
-            # Plot F1 Score
-            ax.plot(f1_scores, label='F1 Score (Micro)', color='blue')
-            ax.scatter(range(len(f1_scores)), f1_scores, s=13, color='blue')
 
-            # Plot Hamming Loss
-            ax.plot(hamming_losses, label='Hamming Loss', color='red')
-            ax.scatter(range(len(hamming_losses)), hamming_losses, s=13, color='red')
+    performances = {name: {"active": [], "combined": [], "small": []} for name in model_names}
 
-            # Set x and y axis major locators and formatters
-            ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=5, integer=True))
-            ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=10))
-            ax.yaxis.set_major_formatter(mpl.ticker.PercentFormatter(xmax=1))
+    for split_index, (test_indices, train_indices) in enumerate(indices):
+        X_pool, y_pool = X_test_all[train_indices], y_test_all[train_indices]
+        X_test, y_test = X_test_all[test_indices], y_test_all[test_indices]
 
-            # Set limits for y-axis
-            ax.set_ylim(bottom=0, top=1)
-            ax.grid(True)
+        for i, model in enumerate(initialmodels):
+            model.fit(X_pool, y_pool)
+            f1_small, ham_small = evaluate(model, X_test, y_test, f"Fold {split_index + 1}: Small {model_names[i]}")
+            performances[model_names[i]]["small"].append(f1_small)
 
-            # Titles and labels
-            ax.set_title('Incremental Classification Metrics')
-            ax.set_xlabel('Query iteration')
-            ax.set_ylabel('Metric value')
+            X_combined = np.vstack([X_pool, X_train])
+            y_combined = np.vstack([y_pool, y_train])
+            model.fit(X_combined, y_combined)
+            f1_combined, ham_combined = evaluate(model, X_test, y_test,
+                                                 f"Fold {split_index + 1}: Combined {model_names[i]}")
+            performances[model_names[i]]["combined"].append(f1_combined)
 
-            # Adding a legend to differentiate the lines
-            ax.legend()
+            learner = Learner(model, X_train, y_train)
+            f1_scores, _ = activeLearning(learner, X_pool, y_pool, X_test, y_test)
+            performances[model_names[i]]["active"].append(max(f1_scores))
+            f1_scores, hamming_losses = activeLearning(learner, X_pool, y_pool, X_test, y_test, weightx=weightx)
+            data = pd.DataFrame({'Iteration': range(len(f1_scores)),
+                                 'F1 Score': f1_scores,
+                                 'Hamming Loss': hamming_losses})
+            melted_data = pd.melt(data, id_vars=['Iteration'], value_vars=['F1 Score', 'Hamming Loss'],
+                                  var_name='Metric',
+                                  value_name='Score')
+            window_size = 3  # Smooth the lines
+            melted_data['Smoothed Score'] = melted_data.groupby('Metric')['Score'].rolling(window=window_size,
+                                                                                           center=True).mean().reset_index(
+                level=0, drop=True)
 
-            plt.show()
+            sns.lineplot(ax=axs[split_index], data=melted_data[melted_data['Metric'] == 'F1 Score'], x='Iteration',
+                         y='Smoothed Score',
+                         label=f'{model_names[i]} F1 Score', linestyle='-', linewidth=2, color=palette[i])
+            axs[split_index].axhline(y=f1_combined, color=palette[i], linestyle='--', label=f'{model_names[i]} Combined Model F1',
+                                     linewidth=1)
+            axs[split_index].axhline(y=f1_small, color=palette[i], linestyle=':', label=f'{model_names[i]} Small Model F1',
+                                     linewidth=1)
+            axs[split_index].set_title(f'Fold {split_index + 1}, {weightx}')
+            axs[split_index].set_xlabel('Iteration')
+            axs[split_index].set_ylabel('Score')
+            axs[split_index].grid(True)
 
-        for learner in learners:
-            activeLearning(learner, X_pool, y_pool, X_test, y_test)
+    # Single legend for all plots
+    handles, labels = axs[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='upper left', bbox_to_anchor=(1.05, 1), title='Model and Fold', title_fontsize='10',
+               fontsize='8')
+    plt.tight_layout()
+    plt.show()
 
-    study()
+    avg_performances = {name: {metric: np.mean(vals) for metric, vals in metrics.items()} for name, metrics in
+                        performances.items()}
 
-pilotStudy()
+    # Print results in LaTeX table format
+    print("\\begin{tabular}{lccc}")
+    print("\\hline")
+    print("Model & Avg Best Active F1 & Avg Combined F1 & Avg Small F1 \\\\")
+    print("\\hline")
+    for model, metrics in avg_performances.items():
+        print(f"{model} & {metrics['active']:.4f} & {metrics['combined']:.4f} & {metrics['small']:.4f} \\\\")
+    print("\\hline")
+    print("\\end{tabular}")
+def activeLearning(learner, X_pool, y_pool, X_test, y_test, n_queries=None, weightx=1):
+    if not n_queries:
+        n_queries = X_pool.shape[0]
+
+    X_pool_copy = X_pool.copy()
+    y_pool_copy = y_pool.copy()
+
+    f1_scores = []
+    hamming_losses = []
+
+    f1, ham = evaluate(learner.model, X_test, y_test)
+    f1_scores.append(f1)
+    hamming_losses.append(ham)
+
+    query_count = 0
+
+    while query_count < n_queries:
+        is_first_query = (query_count == 0)
+        query_indices, query_weights = learner.query(X_pool_copy, is_first_query=is_first_query, weightx=weightx)
+
+        for idx, weight in zip(query_indices, query_weights):
+            if query_count >= n_queries:
+                break
+            learner.teach(X=X_pool_copy[idx].reshape(1, -1), y=y_pool_copy[idx].reshape(1, -1), sample_weight=weight)
+            query_count += 1
+
+        X_pool_copy = np.delete(X_pool_copy, query_indices, axis=0)
+        y_pool_copy = np.delete(y_pool_copy, query_indices, axis=0)
+
+        f1, ham = evaluate(learner.model, X_test, y_test, query_count)
+        f1_scores.append(f1)
+        hamming_losses.append(ham)
+
+    return f1_scores, hamming_losses
+
+main()

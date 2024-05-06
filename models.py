@@ -4,6 +4,7 @@
 from sklearn.multioutput import MultiOutputClassifier # for stacking Lgbmboost abd xgboost
 import lightgbm as lgb
 from xgboost import XGBClassifier
+import xgboost as xgb
 from sklearn.ensemble import RandomForestClassifier
 from keras.src.optimizers import Adam
 from keras.models import Sequential
@@ -46,11 +47,11 @@ def loadData(file="data/AlaskaClean.csv"):
 
 def getModels():
     # simple method to get all the models in a list
-    rf_model = RandomForestClassifier(n_estimators=100, random_state=22)
+    rf_model = RandomForestClassifier(n_estimators=500, random_state=22, bootstrap=False)
     xgb_model = XGBClassifier(use_label_encoder=False, multi_strategy="multi_output_tree", random_state=22)
     lgb_model = MultiOutputClassifier(lgb.LGBMClassifier(verbosity=-1, random_state=22))
     #nn_model = getNN()
-    models = [rf_model, xgb_model, lgb_model] #, nn_model]
+    models = [rf_model, xgb_model, lgb_model] # nn_model]
     return models
 
 class MCDropout(Layer):
