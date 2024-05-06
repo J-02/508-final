@@ -2,7 +2,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.ensemble import RandomForestClassifier
 import xgboost as xgb
-import lightgbm as lgb
+#import lightgbm as lgb
 from models import getModels, loadData
 from ALearn import Learner
 from sklearn.metrics import accuracy_score, f1_score, hamming_loss
@@ -27,6 +27,8 @@ def evaluate(model, X_pool, y_pool, iteration="initial"):
 
 def evaluate_predictions(y_true, y_pred):
     # returns both f1 micro score and hamming loss
+    if y_pred.dtype.kind in 'fc':  # Check if data type is float or complex
+        y_pred = y_pred.round().astype(int)
     f1_micro = f1_score(y_true, y_pred, average='micro')
     hamming_loss_val = hamming_loss(y_true, y_pred)
     return f1_micro, hamming_loss_val
@@ -84,7 +86,7 @@ def main():
     initialmodels = getModels()
     [model.fit(X_train, y_train) for model in initialmodels]
     learners = [Learner(model, X_train, y_train) for model in initialmodels]
-    model_names = ["Random Forest", "XGBoost", "LightGBM"]
+    model_names = ["NN", "Random Forest", "XGBoost", "LightGBM"]
     palette = sns.color_palette("husl", len(learners))
 
     for i, (learner, name) in enumerate(zip(learners, model_names)):
@@ -146,8 +148,7 @@ def main(weightx=1):
     indices = list(stratifier.split(X_test_all, y_test_all))
 
     initialmodels = getModels()
-    [model.fit(X_train, y_train) for model in initialmodels]
-    model_names = ["Random Forest", "XGBoost", "LightGBM"]
+    model_names = ["NN", "Random Forest", "XGBoost", "LightGBM"]
     palette = sns.color_palette("husl", len(initialmodels))
 
     fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(20, 15))  # Adjust as needed for the number of splits
