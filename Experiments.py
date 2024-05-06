@@ -142,7 +142,7 @@ def main(weightx=1):
     X_test_all = np.array(test_data[features])
     y_test_all = np.array(test_data[labels])
 
-    stratifier = IterativeStratification(n_splits=4, order=1, random_state=5)
+    stratifier = IterativeStratification(n_splits=4, order=1)
     indices = list(stratifier.split(X_test_all, y_test_all))
 
     initialmodels = getModels()

@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Load CSV file into DataFrame
-df = pd.read_csv('/Users/tadeozuniga/PycharmProjects/508-final/data/Alaska.csv')
+df = pd.read_csv('/data/Alaska.csv')
 
 # Display the first 5 rows of the DataFrame
 #print(df.head())

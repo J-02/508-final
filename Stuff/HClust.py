@@ -6,7 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 # Load and prepare the data
-data = pd.read_csv('/Users/tadeozuniga/PycharmProjects/508-final/data/Alasak_cleaned.csv')
+data = pd.read_csv('/data/Alasak_cleaned.csv')
 features = ['elev_m', 'shrub', 'longitude', 'latitude', 'dshrub', 'point']
 X = data[features]
 scaler = StandardScaler()
